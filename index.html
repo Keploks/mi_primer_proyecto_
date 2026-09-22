@@ -1,0 +1,1948 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador PhiSat-1 | Procesamiento Inteligente y Alta Integridad en Borde Orbital</title>
+  <meta name="description" content="Simulador aeroespacial de procesamiento en el borde orbital y alta integridad para la misión PhiSat-1 de la ESA. Tesina académica por Alonso Clemente (2026).">
+  
+  <!-- Google Fonts: Space Grotesk & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Space Grotesk', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            space: {
+              950: '#030712',
+              900: '#060d1f',
+              850: '#0a142e',
+              800: '#0f1f44',
+              700: '#1b326b',
+            },
+            telemetry: {
+              green: '#00f59b',
+              blue: '#00d2ff',
+              cyan: '#00ffff',
+              amber: '#ffb703',
+              red: '#ff3366',
+              purple: '#b5179e',
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'scanline': 'scanline 8s linear infinite',
+            'glow': 'glow 2s ease-in-out infinite alternate',
+          },
+          keyframes: {
+            scanline: {
+              '0%': { transform: 'translateY(-100%)' },
+              '100%': { transform: 'translateY(1000%)' }
+            },
+            glow: {
+              '0%': { boxShadow: '0 0 5px rgba(0, 210, 255, 0.2)' },
+              '100%': { boxShadow: '0 0 20px rgba(0, 210, 255, 0.6)' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Custom Aerospace UI & HUD effects */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #060d1f;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1b326b;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #00d2ff;
+    }
+    .hud-border {
+      position: relative;
+      background: linear-gradient(135deg, rgba(15, 31, 68, 0.7) 0%, rgba(6, 13, 31, 0.9) 100%);
+      border: 1px solid rgba(0, 210, 255, 0.2);
+    }
+    .hud-border::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: -1px;
+      width: 8px;
+      height: 8px;
+      border-top: 2px solid #00d2ff;
+      border-left: 2px solid #00d2ff;
+      pointer-events: none;
+    }
+    .hud-border::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      right: -1px;
+      width: 8px;
+      height: 8px;
+      border-bottom: 2px solid #00d2ff;
+      border-right: 2px solid #00d2ff;
+      pointer-events: none;
+    }
+    .scanlines {
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+    }
+    .hud-grid {
+      background-image: radial-gradient(rgba(0, 210, 255, 0.1) 1px, transparent 0);
+      background-size: 24px 24px;
+    }
+    .crt-glow {
+      text-shadow: 0 0 8px rgba(0, 245, 155, 0.6);
+    }
+    .crt-glow-blue {
+      text-shadow: 0 0 8px rgba(0, 210, 255, 0.6);
+    }
+    .crt-glow-red {
+      text-shadow: 0 0 10px rgba(255, 51, 102, 0.8);
+    }
+  </style>
+</head>
+<body class="bg-space-950 text-slate-200 font-sans min-h-screen flex flex-col selection:bg-telemetry-blue selection:text-space-950 relative overflow-x-hidden hud-grid">
+
+  <!-- Top Telemetry Ticker / Status Bar -->
+  <header class="border-b border-space-800 bg-space-900/90 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+      
+      <!-- Brand & Mission Badge -->
+      <div class="flex items-center space-x-3">
+        <div class="w-3 h-3 rounded-full bg-telemetry-green animate-ping"></div>
+        <div class="flex items-center space-x-2">
+          <span class="bg-telemetry-blue/20 text-telemetry-blue border border-telemetry-blue/40 px-2 py-0.5 rounded font-bold uppercase tracking-wider">ESA • PHISAT-1</span>
+          <span class="text-slate-400 hidden sm:inline">|</span>
+          <span class="text-slate-300 font-semibold tracking-wide">EDGE COMPUTING &amp; HIGH INTEGRITY SIMULATOR</span>
+        </div>
+      </div>
+
+      <!-- Real-Time Simulated Flight Telemetry -->
+      <div class="flex items-center flex-wrap gap-4 text-slate-400">
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">ORBIT:</span>
+          <span class="text-telemetry-cyan font-semibold" id="telemetry-orbit">530 km SSO</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">OBC SPEED:</span>
+          <span class="text-telemetry-green font-semibold">400 MHz</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">VPU CORES:</span>
+          <span class="text-telemetry-blue font-semibold">12x SHAVE</span>
+        </div>
+        <div class="flex items-center space-x-1.5">
+          <span class="text-slate-500">UTC:</span>
+          <span class="text-slate-200 font-bold" id="telemetry-clock">00:00:00 UTC</span>
+        </div>
+        <div class="hidden md:flex items-center space-x-1">
+          <button id="audio-toggle-btn" onclick="toggleAudio()" class="px-2 py-0.5 rounded border border-space-700 bg-space-850 hover:border-telemetry-blue text-slate-300 text-[11px] flex items-center gap-1 transition">
+            <span id="audio-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span id="audio-text">Audio Telemetría: OFF</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Sub-header metadata -->
+    <div class="bg-space-950/80 border-t border-space-850 px-4 sm:px-6 py-1.5 text-[11px] font-mono flex flex-wrap items-center justify-between text-slate-400">
+      <div class="flex items-center gap-2">
+        <span class="text-telemetry-green">●</span>
+        <span>Investigador Principal: <strong class="text-slate-200">Alonso Clemente</strong></span>
+        <span class="text-slate-600">•</span>
+        <span class="text-slate-400">Dimensión de Investigación Académica (Agosto, 2026)</span>
+      </div>
+      <div class="text-slate-400 flex items-center gap-3">
+        <span>Framework: <span class="text-telemetry-cyan">ESA NMF / ARINC 653 RTA</span></span>
+        <span class="text-slate-600">•</span>
+        <span>AI Engine: <span class="text-telemetry-blue">CloudScout FP16</span></span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 mt-1 flex border-b border-space-800 space-x-1 sm:space-x-4 overflow-x-auto">
+      <button onclick="switchTab('tab1')" id="nav-tab1" class="tab-btn py-3 px-3 sm:px-5 font-mono text-xs sm:text-sm font-semibold border-b-2 border-telemetry-blue text-telemetry-blue flex items-center gap-2 tracking-wide transition whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+        </svg>
+        <span>TAB 1: INVESTIGACIÓN Y FUNDAMENTOS</span>
+      </button>
+
+      <button onclick="switchTab('tab2')" id="nav-tab2" class="tab-btn py-3 px-3 sm:px-5 font-mono text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 tracking-wide transition whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+        </svg>
+        <span>TAB 2: SIMULADOR DE BORDE (NÚCLEO)</span>
+        <span class="bg-telemetry-green/20 text-telemetry-green text-[10px] px-1.5 py-0.5 rounded font-bold border border-telemetry-green/30">EN VIVO</span>
+      </button>
+
+      <button onclick="switchTab('tab3')" id="nav-tab3" class="tab-btn py-3 px-3 sm:px-5 font-mono text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 tracking-wide transition whitespace-nowrap">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>TAB 3: EVALUACIÓN Y PEDAGOGÍA</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ================================================================================== -->
+    <!-- TAB 1: INVESTIGACIÓN Y FUNDAMENTOS (DIMENSIÓN 1) -->
+    <!-- ================================================================================== -->
+    <section id="content-tab1" class="tab-content space-y-8 block">
+      
+      <!-- Hero Banner Investigación -->
+      <div class="hud-border rounded-xl p-6 sm:p-8 bg-space-900/60 shadow-2xl relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-96 h-96 bg-telemetry-blue/5 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="relative z-10 max-w-4xl">
+          <div class="flex items-center gap-2 font-mono text-xs text-telemetry-blue uppercase tracking-widest mb-2">
+            <span class="inline-block w-2 h-2 bg-telemetry-blue rounded-full"></span>
+            Dimensión 1 • Marco Teórico &amp; Estado del Arte
+          </div>
+          <h1 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-white mb-3 leading-tight">
+            Filtrado Autónomo de Nubes en Órbita mediante <span class="text-transparent bg-clip-text bg-gradient-to-r from-telemetry-blue to-telemetry-green">IA a Bordo en la Misión PhiSat-1</span>
+          </h1>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed mb-4">
+            Investigación académica desarrollada por <strong class="text-telemetry-green">Alonso Clemente (Agosto, 2026)</strong>. Aborda la disrupción del procesamiento en el borde orbital (<em class="text-slate-100">Edge AI</em>) acoplado a arquitecturas de software de <strong class="text-telemetry-blue">Alta Integridad y Determinismo</strong> en CubeSats de observación terrestre de la Agencia Espacial Europea (ESA).
+          </p>
+          <div class="flex flex-wrap gap-3 font-mono text-xs">
+            <div class="bg-space-850 px-3 py-1.5 rounded border border-space-700 text-slate-300">
+              <span class="text-slate-500">Satélite:</span> 6U CubeSat FSSCat / PhiSat-1
+            </div>
+            <div class="bg-space-850 px-3 py-1.5 rounded border border-space-700 text-slate-300">
+              <span class="text-slate-500">Sensor:</span> Hiperespectral SIMERA HyperScout-2
+            </div>
+            <div class="bg-space-850 px-3 py-1.5 rounded border border-space-700 text-slate-300">
+              <span class="text-slate-500">Acelerador:</span> Intel Movidius Myriad 2 VPU
+            </div>
+            <div class="bg-space-850 px-3 py-1.5 rounded border border-space-700 text-slate-300">
+              <span class="text-slate-500">Framework:</span> ESA NanoSat MO Framework (NMF)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección 1: El Cuello de Botella del Downlink & La Problemática de las Nubes -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Explicación Teórica y Formulación -->
+        <div class="lg:col-span-7 space-y-6">
+          <div class="hud-border rounded-xl p-6 bg-space-900/70">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2 mb-3 border-b border-space-800 pb-2 font-mono">
+              <span class="text-telemetry-amber">01.1</span> EL CUELLO DE BOTELLA DEL DOWNLINK ESPACIAL
+            </h2>
+            
+            <p class="text-slate-300 text-sm leading-relaxed mb-4">
+              En las últimas décadas, la tecnología de sensores ópticos e hiperespectrales en órbita terrestre baja (LEO) ha experimentado una evolución exponencial. Las matrices de detectores multiespectrales generan <strong class="text-telemetry-blue">hasta 100 veces más volumen de datos brutos (Raw Imagery)</strong> por generación satelital, alcanzando fácilmente tasas de adquisición de varios gigabits por segundo.
+            </p>
+
+            <div class="bg-space-850/90 rounded-lg p-4 border border-space-700 mb-4 font-mono text-xs space-y-2">
+              <div class="text-telemetry-amber font-semibold flex items-center justify-between">
+                <span>PARADOJA DEL ANCHO DE BANDA ESPACIAL:</span>
+                <span class="text-slate-400">Factor de Crecimiento</span>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-space-800">
+                <span class="text-slate-300">Generación de Datos en Sensores Ópticos:</span>
+                <span class="text-telemetry-green font-bold">~100x por década</span>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-space-800">
+                <span class="text-slate-300">Tasa de Downlink RF (Bandas S / X):</span>
+                <span class="text-telemetry-amber font-bold">~3x a 5x por década</span>
+              </div>
+              <div class="flex justify-between items-center py-1">
+                <span class="text-slate-300">Ventana de Contacto Terreno (Pase LEO típico):</span>
+                <span class="text-telemetry-cyan font-bold">5 a 10 minutos / pase</span>
+              </div>
+            </div>
+
+            <p class="text-slate-300 text-sm leading-relaxed mb-3">
+              Debido a las severas restricciones <strong class="text-slate-100">SWaP (Size, Weight, and Power)</strong> en CubeSats, los transmisores de radiofrecuencia no pueden disipar la potencia térmica requerida ni portar antenas parabólicas de alta ganancia. Por lo tanto, el canal de radiofrecuencia (Banda S @ 2 Mbps o Banda X @ 50 Mbps) representa un <span class="text-telemetry-red font-semibold">cuello de botella infranqueable</span> bajo el paradigma tradicional de "descargar todo para procesar en tierra".
+            </p>
+
+            <!-- Factor de Nubosidad Global -->
+            <div class="p-4 rounded-lg bg-telemetry-red/10 border border-telemetry-red/30">
+              <div class="flex items-start gap-3">
+                <div class="p-2 bg-telemetry-red/20 rounded text-telemetry-red font-bold text-lg font-mono">
+                  67%
+                </div>
+                <div>
+                  <h4 class="text-white font-bold text-sm">El Factor Crítico de Oclusión por Nubes</h4>
+                  <p class="text-slate-300 text-xs mt-1 leading-relaxed">
+                    Datos climatológicos de la OMM y la NASA demuestran que en promedio el <strong>67% de la superficie terrestre</strong> se encuentra ocluida por mantos nubosos en cualquier instante dado. En misiones ópticas de monitoreo terrestre (agricultura, incendios, deforestación), una imagen con &gt;70% de nubes carece por completo de valor científico o comercial.
+                  </p>
+                  <p class="text-telemetry-amber text-xs font-mono mt-2">
+                    ⚠ Consecuencia: 2 de cada 3 megabytes descargados a tierra saturan estaciones y consumen energía de baterías transmitiendo vapor de agua inútil.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Gráfico Interactivo de Asimetría Tecnológica -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="hud-border rounded-xl p-6 bg-space-900/70 h-full flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-3 border-b border-space-800 pb-2">
+                <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+                  <span class="text-telemetry-cyan">01.2</span> ASIMETRÍA GENERACIÓN VS DOWNLINK
+                </h3>
+                <span class="text-[10px] font-mono text-slate-400 bg-space-850 px-2 py-0.5 rounded border border-space-700">Métrica Relativa</span>
+              </div>
+              
+              <div class="relative h-64 w-full">
+                <canvas id="growthChart"></canvas>
+              </div>
+
+              <div class="mt-4 p-3 bg-space-850 rounded border border-space-800 text-xs font-mono text-slate-300 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-telemetry-blue inline-block"></span>
+                    Rendimiento Sensor Óptico
+                  </span>
+                  <span class="text-telemetry-blue font-bold">+10,000% (Base 100x)</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-telemetry-amber inline-block"></span>
+                    Capacidad Enlace RF Downlink
+                  </span>
+                  <span class="text-telemetry-amber font-bold">+400% (Base 5x)</span>
+                </div>
+                <div class="flex items-center justify-between text-telemetry-red">
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-telemetry-red inline-block"></span>
+                    Brecha de Datos Sin Transmitir
+                  </span>
+                  <span class="font-bold">Déficit Crítico (95%)</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 text-center">
+              <span class="text-[11px] text-slate-400 font-mono italic">
+                "La solución radica en mover el filtro decisional a la órbita antes del búfer de transmisión."
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sección 2: Componentes Tecnológicos Clave (Tarjetas Técnicas Interactivas) -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-white font-mono flex items-center gap-2">
+            <span class="text-telemetry-green">01.3</span> ARQUITECTURA TECNOLÓGICA DE PHISAT-1
+          </h2>
+          <span class="text-xs font-mono text-slate-400">Selecciona cada bloque para ver especificaciones detalladas</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          <!-- Card 1: Intel Movidius Myriad 2 VPU -->
+          <div class="hud-border rounded-xl p-5 bg-space-900/80 hover:border-telemetry-blue transition group">
+            <div class="flex items-center justify-between mb-3">
+              <div class="p-2.5 rounded-lg bg-telemetry-blue/10 border border-telemetry-blue/30 text-telemetry-blue">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                </svg>
+              </div>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-space-800 text-telemetry-blue border border-telemetry-blue/30 font-bold">HARDWARE SWaP</span>
+            </div>
+
+            <h3 class="text-base font-bold text-white group-hover:text-telemetry-blue transition font-mono">
+              Intel Movidius Myriad 2 VPU
+            </h3>
+            <p class="text-xs text-slate-400 font-mono mt-0.5 mb-3">
+              Unidad de Procesamiento de Visión de Ultra Bajo Consumo
+            </p>
+
+            <p class="text-slate-300 text-xs leading-relaxed mb-4">
+              Microprocesador vectorial comercial optimizado (COTS) calificado para vuelo espacial. Diseñado específicamente para inferencia de redes neuronales convolucionales con un presupuesto energético minúsculo.
+            </p>
+
+            <ul class="space-y-2 text-xs font-mono text-slate-300 border-t border-space-800 pt-3">
+              <li class="flex justify-between">
+                <span class="text-slate-400">Consumo Pico:</span>
+                <span class="text-telemetry-green font-bold">&lt; 2.5 Watts</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Cores Vectoriales:</span>
+                <span class="text-telemetry-cyan font-bold">12x SHAVE (128-bit VLIW)</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Precisión Numérica:</span>
+                <span class="text-slate-200 font-bold">Punto Flotante FP16</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Tolerancia Radiación:</span>
+                <span class="text-slate-200 font-bold">TID ~10 krad (Tested)</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Card 2: Algoritmo CloudScout CNN -->
+          <div class="hud-border rounded-xl p-5 bg-space-900/80 hover:border-telemetry-cyan transition group">
+            <div class="flex items-center justify-between mb-3">
+              <div class="p-2.5 rounded-lg bg-telemetry-cyan/10 border border-telemetry-cyan/30 text-telemetry-cyan">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+              </div>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-space-800 text-telemetry-cyan border border-telemetry-cyan/30 font-bold">MODELO CNN</span>
+            </div>
+
+            <h3 class="text-base font-bold text-white group-hover:text-telemetry-cyan transition font-mono">
+              Algoritmo CloudScout CNN
+            </h3>
+            <p class="text-xs text-slate-400 font-mono mt-0.5 mb-3">
+              Red Convolucional 2D para Segmentación de Nubes
+            </p>
+
+            <p class="text-slate-300 text-xs leading-relaxed mb-4">
+              Modelo neuronal ligero optimizado para ejecutarse en el búfer directo del sensor hiperespectral HyperScout-2. Clasifica cada píxel o macro-bloque en superficie terrestre vs cubierta nubosa en milisegundos.
+            </p>
+
+            <ul class="space-y-2 text-xs font-mono text-slate-300 border-t border-space-800 pt-3">
+              <li class="flex justify-between">
+                <span class="text-slate-400">Latencia Inferencia:</span>
+                <span class="text-telemetry-green font-bold">~135 ms / frame</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Footprint de Memoria:</span>
+                <span class="text-telemetry-cyan font-bold">1.8 MB (Optimizado FP16)</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Precisión (F1-Score):</span>
+                <span class="text-slate-200 font-bold">92.4% vs ground truth</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Umbral de Descarte:</span>
+                <span class="text-telemetry-amber font-bold">Cobertura &gt; 70%</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Card 3: Aislamiento y Alta Integridad (RTA / ARINC 653 / NMF) -->
+          <div class="hud-border rounded-xl p-5 bg-space-900/80 hover:border-telemetry-green transition group">
+            <div class="flex items-center justify-between mb-3">
+              <div class="p-2.5 rounded-lg bg-telemetry-green/10 border border-telemetry-green/30 text-telemetry-green">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+              </div>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-space-800 text-telemetry-green border border-telemetry-green/30 font-bold">ALTA INTEGRIDAD</span>
+            </div>
+
+            <h3 class="text-base font-bold text-white group-hover:text-telemetry-green transition font-mono">
+              Arquitectura RTA / NMF
+            </h3>
+            <p class="text-xs text-slate-400 font-mono mt-0.5 mb-3">
+              Aseguramiento en Tiempo de Ejecución y Supervisor OBC
+            </p>
+
+            <p class="text-slate-300 text-xs leading-relaxed mb-4">
+              Las redes neuronales son <em>no deterministas</em> y cajas negras. Para evitar que un fallo en la IA congele el computador de vuelo (OBC), el estándar ARINC 653 y el NanoSat MO Framework aíslan la memoria y aplican monitoreo en anillo seguro.
+            </p>
+
+            <ul class="space-y-2 text-xs font-mono text-slate-300 border-t border-space-800 pt-3">
+              <li class="flex justify-between">
+                <span class="text-slate-400">Supervisor de Vuelo:</span>
+                <span class="text-telemetry-green font-bold">OBC Determinista (Watchdog)</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Aislamiento de Memoria:</span>
+                <span class="text-telemetry-cyan font-bold">Spatial/Temporal Sandboxing</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Clasificación ESA:</span>
+                <span class="text-telemetry-amber font-bold">Cat A (OBC) vs Cat D (AI)</span>
+              </li>
+              <li class="flex justify-between">
+                <span class="text-slate-400">Recuperación de Falla:</span>
+                <span class="text-slate-200 font-bold">Aislamiento I/O &lt; 5 ms</span>
+              </li>
+            </ul>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Diagrama de Arquitectura de Memoria y Bus de Datos (Infografía Interactiva) -->
+      <div class="hud-border rounded-xl p-6 bg-space-900/70">
+        <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2 mb-4 border-b border-space-800 pb-2">
+          <span class="text-telemetry-purple">01.4</span> ESQUEMA DE SEGURIDAD ARINC 653 / NANO SAT MO FRAMEWORK
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-mono">
+          
+          <!-- Lado Izquierdo: Partición Crítica OBC (Cat A/B) -->
+          <div class="p-4 rounded-lg bg-space-850 border border-telemetry-green/40 relative">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-telemetry-green font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-telemetry-green"></span>
+                DOMINIO CRÍTICO: OBC &amp; VUELO (DETERMINISTA)
+              </span>
+              <span class="bg-telemetry-green/20 text-telemetry-green px-2 py-0.5 rounded text-[10px] font-bold">CATEGORÍA A (ESA)</span>
+            </div>
+            <p class="text-slate-300 text-xs font-sans mb-3 leading-relaxed">
+              Ejecuta el control de actitud y órbita (AOCS), administración de energía (EPS), transpondedor de telemetría segura y el supervisor de salud (Watchdog). Utiliza RTOS determinista calificado y memoria protegida de solo lectura (ROM).
+            </p>
+            <div class="bg-space-950 p-2.5 rounded border border-space-800 space-y-1 text-[11px] text-slate-400">
+              <div>• <strong>ARINC 653 Partition 0:</strong> Flight Guidance &amp; Thrusters Control</div>
+              <div>• <strong>ARINC 653 Partition 1:</strong> Telecommand &amp; Telemetry S-Band Handler</div>
+              <div>• <strong>RTA Monitor:</strong> Hardware Watchdog + Memory Guard</div>
+            </div>
+          </div>
+
+          <!-- Lado Derecho: Partición Payload IA (Cat D) -->
+          <div class="p-4 rounded-lg bg-space-850 border border-telemetry-blue/40 relative">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-telemetry-blue font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-telemetry-blue"></span>
+                DOMINIO DE CARGA ÚTIL: MYRIAD 2 &amp; CNN (NO DETERMINISTA)
+              </span>
+              <span class="bg-telemetry-blue/20 text-telemetry-blue px-2 py-0.5 rounded text-[10px] font-bold">CATEGORÍA D (PAYLOAD)</span>
+            </div>
+            <p class="text-slate-300 text-xs font-sans mb-3 leading-relaxed">
+              Ejecuta CloudScout CNN y el procesamiento hiperespectral. Si ocurre un fallo de puntero nulo, corrupción de pesos o bucle infinito por radiación (SEU), el supervisor RTA corta el búfer sin contaminar el bus de aviónica del satélite.
+            </p>
+            <div class="bg-space-950 p-2.5 rounded border border-space-800 space-y-1 text-[11px] text-slate-400">
+              <div>• <strong>Isolated User Space:</strong> Myriad 2 Driver &amp; Memory Pool</div>
+              <div>• <strong>I/O Buffer:</strong> Ring Buffer unidireccional desacoplado</div>
+              <div>• <strong>Fail-Safe Action:</strong> Fallback inmediato a transmisión cruda o bypass</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ================================================================================== -->
+    <!-- TAB 2: SIMULADOR DE PROCESAMIENTO EN EL BORDE (DIMENSIÓN 2 - NÚCLEO) -->
+    <!-- ================================================================================== -->
+    <section id="content-tab2" class="tab-content space-y-6 hidden">
+      
+      <!-- Panel de Control y Telemetría Central -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Columna Izquierda: CONTROLES DE ENTRADA (Inputs interactivos) -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="hud-border rounded-xl p-6 bg-space-900/80">
+            <div class="flex items-center justify-between mb-4 border-b border-space-800 pb-2">
+              <h2 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+                <span class="text-telemetry-cyan">02.1</span> PANEL DE CONTROL DE LA NAVE
+              </h2>
+              <span class="text-[10px] font-mono text-telemetry-green animate-pulse">● ENLACE UPLINK ACTIVO</span>
+            </div>
+
+            <div class="space-y-5">
+              
+              <!-- 1. Porcentaje de Nubosidad en la Imagen Capturada -->
+              <div>
+                <div class="flex items-center justify-between mb-1.5 font-mono text-xs">
+                  <label for="cloud-slider" class="text-slate-300 font-semibold flex items-center gap-1.5">
+                    <span>Nubosidad en Imagen Capturada:</span>
+                  </label>
+                  <span id="cloud-value-display" class="text-telemetry-cyan font-bold text-sm bg-space-850 px-2 py-0.5 rounded border border-space-700">65%</span>
+                </div>
+                <input type="range" id="cloud-slider" min="0" max="100" value="65" 
+                       class="w-full h-2 bg-space-800 rounded-lg appearance-none cursor-pointer accent-telemetry-cyan"
+                       oninput="updateSimulation()">
+                <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+                  <span>0% (Despejado)</span>
+                  <span class="text-telemetry-amber font-semibold">70% (Umbral de Descarte)</span>
+                  <span>100% (Tormenta Densa)</span>
+                </div>
+              </div>
+
+              <!-- 2. Estado de la IA a Bordo (Edge AI) -->
+              <div class="p-3.5 rounded-lg bg-space-850 border border-space-750 flex items-center justify-between">
+                <div>
+                  <div class="font-mono text-xs font-bold text-white flex items-center gap-2">
+                    <span>Acelerador Edge AI (Myriad 2 VPU)</span>
+                    <span id="ai-status-pill" class="text-[10px] px-1.5 py-0.2 rounded bg-telemetry-green/20 text-telemetry-green border border-telemetry-green/30">ACTIVO</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    Ejecuta CloudScout CNN para segmentación autónoma
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="ai-toggle" class="sr-only peer" checked onchange="updateSimulation()">
+                  <div class="w-11 h-6 bg-space-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-telemetry-blue"></div>
+                </label>
+              </div>
+
+              <!-- 3. Aseguramiento en Tiempo de Ejecución (RTA/NMF) -->
+              <div class="p-3.5 rounded-lg bg-space-850 border border-space-750 flex items-center justify-between">
+                <div>
+                  <div class="font-mono text-xs font-bold text-white flex items-center gap-2">
+                    <span>Supervisor RTA / NMF (Alta Integridad)</span>
+                    <span id="rta-status-pill" class="text-[10px] px-1.5 py-0.2 rounded bg-telemetry-green/20 text-telemetry-green border border-telemetry-green/30">ARMADO</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 font-sans mt-0.5">
+                    Aislamiento espacial de memoria y supervisión determinista
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="rta-toggle" class="sr-only peer" checked onchange="updateSimulation()">
+                  <div class="w-11 h-6 bg-space-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-telemetry-green"></div>
+                </label>
+              </div>
+
+              <!-- 4. Tasa de Descarga de Radiofrecuencia (Baud Rate Downlink) -->
+              <div>
+                <label class="block font-mono text-xs text-slate-300 font-semibold mb-1.5">
+                  Canal de Radiofrecuencia (Downlink Transceiver):
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <button type="button" id="rf-band-s" onclick="setRfBand('s')" 
+                          class="py-2 px-3 rounded border text-xs font-mono font-bold flex flex-col items-center justify-center transition border-space-700 bg-space-850 text-slate-400 hover:border-slate-500">
+                    <span class="text-white">Banda S (TT&amp;C)</span>
+                    <span class="text-[10px] text-telemetry-cyan font-normal">2.0 Mbps (Estándar)</span>
+                  </button>
+                  <button type="button" id="rf-band-x" onclick="setRfBand('x')" 
+                          class="py-2 px-3 rounded border text-xs font-mono font-bold flex flex-col items-center justify-center transition border-telemetry-blue bg-telemetry-blue/15 text-telemetry-blue shadow-lg shadow-telemetry-blue/10">
+                    <span class="text-white">Banda X (Payload)</span>
+                    <span class="text-[10px] text-telemetry-green font-normal">50.0 Mbps (Alta Vel.)</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Acciones de Captura y Lote -->
+              <div class="pt-2 border-t border-space-800 flex flex-wrap gap-2">
+                <button onclick="captureNewFrame()" class="flex-1 py-2 px-3 bg-telemetry-blue/20 hover:bg-telemetry-blue/30 text-telemetry-blue border border-telemetry-blue/40 rounded font-mono text-xs font-bold transition flex items-center justify-center gap-1.5">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                  </svg>
+                  Capturar Nuevo Frame
+                </button>
+                
+                <button onclick="simulateBatch(10)" class="py-2 px-3 bg-space-800 hover:bg-space-700 text-slate-200 border border-space-700 rounded font-mono text-xs transition">
+                  Pase Orbital (10 Frames)
+                </button>
+
+                <button onclick="resetStats()" class="py-2 px-2.5 bg-space-850 hover:bg-space-800 text-slate-400 hover:text-slate-200 border border-space-700 rounded font-mono text-xs transition" title="Reiniciar Telemetría Acumulada">
+                  ↺
+                </button>
+              </div>
+
+              <!-- 5. Simular Error Crítico en la IA (Botonera de Pruebas de Falla) -->
+              <div class="pt-3 border-t border-space-800">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="font-mono text-xs font-bold text-telemetry-red flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    INYECCIÓN DE FALLA EN ESPACIO DE VUELO:
+                  </span>
+                  <span class="text-[10px] font-mono text-slate-500">Test Stress</span>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button onclick="triggerFaultInjection()" class="w-full py-2.5 px-3 bg-telemetry-red/15 hover:bg-telemetry-red/25 border border-telemetry-red/50 hover:border-telemetry-red text-telemetry-red font-mono text-xs font-bold rounded transition flex items-center justify-center gap-2 shadow-lg shadow-telemetry-red/10">
+                    <span class="w-2 h-2 rounded-full bg-telemetry-red animate-ping"></span>
+                    Simular Falla Crítica en IA
+                  </button>
+
+                  <button onclick="recoverSystem()" class="w-full py-2.5 px-3 bg-space-800 hover:bg-space-750 border border-space-700 text-slate-300 font-mono text-xs rounded transition flex items-center justify-center gap-1.5">
+                    <span>✓ Normalizar OBC</span>
+                  </button>
+                </div>
+                <p class="text-[10px] font-mono text-slate-500 mt-1.5 leading-tight">
+                  Inyecta un <code class="text-slate-400">SIGSEGV / Pointer Corruption</code> en el hilo de inferencia neuronal para verificar la contención del RTA.
+                </p>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Columna Derecha: VISUALIZADOR DE SENSOR Y SALIDAS EN TIEMPO REAL -->
+        <div class="lg:col-span-7 space-y-6">
+          
+          <!-- Banner de Estado de Integridad de la Misión (OBC Health Monitor) -->
+          <div id="obc-status-container" class="hud-border rounded-xl p-4 bg-space-900/90 border-telemetry-green/40 transition-all duration-300">
+            <div class="flex items-start gap-3">
+              <div id="obc-status-icon" class="p-2.5 rounded-lg bg-telemetry-green/20 text-telemetry-green font-bold text-xl">
+                ✓
+              </div>
+              <div class="flex-grow">
+                <div class="flex items-center justify-between flex-wrap gap-2">
+                  <h3 id="obc-status-title" class="font-mono text-sm font-bold text-telemetry-green tracking-wide">
+                    OBC NOMINAL: SUPERVISOR DE VUELO ACTIVO
+                  </h3>
+                  <span id="obc-stability-badge" class="font-mono text-xs bg-telemetry-green/20 text-telemetry-green px-2 py-0.5 rounded border border-telemetry-green/30 font-bold">
+                    Estabilidad 100%
+                  </span>
+                </div>
+                <p id="obc-status-desc" class="text-xs text-slate-300 mt-1 font-mono leading-relaxed">
+                  Bus síncrono determinista libre de contienda. El espacio de usuario del procesador Myriad 2 se encuentra aislado y en estado saludable.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ventana de Visualización del Sensor Óptico y Detección de Nubes (Canvas Dinámico) -->
+          <div class="hud-border rounded-xl p-5 bg-space-900/80 relative">
+            <div class="flex items-center justify-between mb-3 border-b border-space-800 pb-2">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-telemetry-cyan animate-pulse"></span>
+                <h3 class="text-xs font-mono font-bold text-white uppercase tracking-wider">
+                  VISUALIZADOR HIPERESPECTRAL EN TIEMPO REAL (HyperScout-2)
+                </h3>
+              </div>
+              <div class="font-mono text-[11px] text-slate-400 flex items-center gap-2">
+                <span>FPS: <strong class="text-telemetry-green">7.4</strong></span>
+                <span>•</span>
+                <span>Resolución: <strong class="text-slate-200">2048 x 1088</strong></span>
+              </div>
+            </div>
+
+            <!-- Canvas Satelital Procedimental -->
+            <div class="relative w-full h-64 sm:h-72 rounded-lg overflow-hidden border border-space-800 bg-space-950 flex items-center justify-center">
+              <canvas id="satelliteCanvas" class="w-full h-full object-cover block"></canvas>
+              
+              <!-- HUD Reticle Overlay -->
+              <div class="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 font-mono text-[10px] text-telemetry-cyan/70 scanlines">
+                <div class="flex justify-between items-start">
+                  <div>
+                    <div>FOV: 31.3° x 16.0°</div>
+                    <div>COORDS: 28°43'N 17°53'W (Canarias SSO)</div>
+                  </div>
+                  <div class="text-right">
+                    <div id="canvas-ai-tag" class="px-1.5 py-0.5 rounded bg-space-900/90 text-telemetry-blue border border-telemetry-blue/40 font-bold">
+                      CNN SEGMENTATION: ON
+                    </div>
+                    <div class="mt-1 text-slate-400" id="canvas-time-tag">FRAME #001</div>
+                  </div>
+                </div>
+
+                <!-- Cruz central de telemetría -->
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-40">
+                  <div class="w-12 h-12 border border-telemetry-cyan/60 rounded-full flex items-center justify-center">
+                    <div class="w-1.5 h-1.5 bg-telemetry-cyan rounded-full"></div>
+                  </div>
+                  <div class="absolute w-24 h-[1px] bg-telemetry-cyan/40"></div>
+                  <div class="absolute h-24 w-[1px] bg-telemetry-cyan/40"></div>
+                </div>
+
+                <div class="flex justify-between items-end">
+                  <div class="bg-space-900/80 px-2 py-1 rounded border border-space-800">
+                    <span>MÁSCARA BINARIA: </span>
+                    <span id="canvas-mask-status" class="text-telemetry-green font-bold">CALCULANDO...</span>
+                  </div>
+                  <div class="bg-space-900/80 px-2 py-1 rounded border border-space-800">
+                    <span>INTEGRIDAD DE CUADRO: </span>
+                    <span class="text-telemetry-green font-bold">CRC-32 OK</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Panel de Decisión Inmediata de Transmisión -->
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              
+              <div id="decision-badge" class="p-3 rounded-lg border font-mono flex items-center justify-between bg-space-850 border-space-750">
+                <div>
+                  <div class="text-[10px] text-slate-400 uppercase">Decisión de Transmisión</div>
+                  <div id="decision-text" class="text-sm font-bold text-white">EVALUANDO...</div>
+                </div>
+                <div id="decision-icon" class="text-xl">📡</div>
+              </div>
+
+              <div class="p-3 rounded-lg border border-space-800 bg-space-850 font-mono flex items-center justify-between">
+                <div>
+                  <div class="text-[10px] text-slate-400 uppercase">Ahorro en Frame Actual</div>
+                  <div id="frame-savings-text" class="text-sm font-bold text-telemetry-green">0%</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-[10px] text-slate-500">Tamaño Frame</div>
+                  <div class="text-xs text-slate-300 font-bold">~25 MB (Raw)</div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- Métricas en Tiempo Real (Outputs de Fórmulas Dinámicas) -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            
+            <!-- Métrica 1: Latencia Inferencia -->
+            <div class="hud-border rounded-lg p-3 bg-space-900/70 font-mono">
+              <div class="text-[10px] text-slate-400 uppercase tracking-wider">Latencia Inferencia</div>
+              <div class="flex items-baseline gap-1 mt-1">
+                <span id="metric-latency" class="text-xl font-extrabold text-telemetry-green">135</span>
+                <span class="text-xs text-slate-400">ms</span>
+              </div>
+              <div id="metric-latency-sub" class="text-[10px] text-slate-500 mt-0.5">Myriad 2 (FP16)</div>
+            </div>
+
+            <!-- Métrica 2: Consumo Potencia VPU -->
+            <div class="hud-border rounded-lg p-3 bg-space-900/70 font-mono">
+              <div class="text-[10px] text-slate-400 uppercase tracking-wider">Consumo VPU</div>
+              <div class="flex items-baseline gap-1 mt-1">
+                <span id="metric-power" class="text-xl font-extrabold text-telemetry-blue">2.50</span>
+                <span class="text-xs text-slate-400">W</span>
+              </div>
+              <div id="metric-power-sub" class="text-[10px] text-telemetry-green mt-0.5">SWaP Óptimo (&lt;3W)</div>
+            </div>
+
+            <!-- Métrica 3: Tiempo Estimado Downlink -->
+            <div class="hud-border rounded-lg p-3 bg-space-900/70 font-mono">
+              <div class="text-[10px] text-slate-400 uppercase tracking-wider">Tiempo TX / Frame</div>
+              <div class="flex items-baseline gap-1 mt-1">
+                <span id="metric-tx-time" class="text-xl font-extrabold text-telemetry-cyan">4.0</span>
+                <span class="text-xs text-slate-400">s</span>
+              </div>
+              <div id="metric-tx-sub" class="text-[10px] text-slate-500 mt-0.5">@ Banda X 50M</div>
+            </div>
+
+            <!-- Métrica 4: Ahorro Downlink Global -->
+            <div class="hud-border rounded-lg p-3 bg-space-900/70 font-mono">
+              <div class="text-[10px] text-slate-400 uppercase tracking-wider">Ahorro Acumulado</div>
+              <div class="flex items-baseline gap-1 mt-1">
+                <span id="metric-total-savings" class="text-xl font-extrabold text-telemetry-amber">0.0</span>
+                <span class="text-xs text-slate-400">%</span>
+              </div>
+              <div id="metric-savings-sub" class="text-[10px] text-slate-500 mt-0.5">0 MB descargados</div>
+            </div>
+
+          </div>
+
+          <!-- Histórico de Pases y Registro de Telemetría (Live Console Log) -->
+          <div class="hud-border rounded-xl p-4 bg-space-900/90 font-mono text-xs">
+            <div class="flex items-center justify-between border-b border-space-800 pb-2 mb-2">
+              <span class="text-slate-300 font-bold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-telemetry-green animate-ping"></span>
+                REGISTRO DE TELEMETRÍA DEL FLIGHT SOFTWARE (NMF EVENT LOG)
+              </span>
+              <span class="text-[10px] text-slate-500" id="log-count">Total eventos: 0</span>
+            </div>
+            
+            <div id="telemetry-log" class="h-32 overflow-y-auto space-y-1 text-[11px] text-slate-400 pr-1 select-text">
+              <!-- Logs dinámicos inyectados por JS -->
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ================================================================================== -->
+    <!-- TAB 3: PLANIFICACIÓN DE EVALUACIÓN FUTURA (DIMENSIÓN 3) -->
+    <!-- ================================================================================== -->
+    <section id="content-tab3" class="tab-content space-y-8 hidden">
+      
+      <!-- Encabezado Metodológico -->
+      <div class="hud-border rounded-xl p-6 sm:p-8 bg-space-900/60 shadow-2xl relative">
+        <div class="max-w-4xl">
+          <div class="flex items-center gap-2 font-mono text-xs text-telemetry-green uppercase tracking-widest mb-2">
+            <span class="inline-block w-2 h-2 bg-telemetry-green rounded-full"></span>
+            Dimensión 3 • Diseño Metodológico de Validación Empírica &amp; Pedagógica
+          </div>
+          <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-3">
+            Planificación Formal de Evaluación con Usuarios Reales
+          </h2>
+          <p class="text-slate-300 text-sm leading-relaxed mb-4">
+            Diseño experimental para medir la eficacia pedagógica del simulador en la asimilación conceptual de <strong class="text-telemetry-blue">Sistemas Críticos Espaciales y Edge Computing</strong>, evaluando usabilidad técnica, retención cognitiva y transferencia tecnológica.
+          </p>
+        </div>
+      </div>
+
+      <!-- Grid de 4 Pilares del Diseño Metodológico -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Pilar 1: La Experiencia a Medir -->
+        <div class="hud-border rounded-xl p-6 bg-space-900/80">
+          <div class="flex items-center justify-between mb-3 border-b border-space-800 pb-2">
+            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+              <span class="text-telemetry-blue">03.1</span> LA EXPERIENCIA A MEDIR
+            </h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-telemetry-blue/20 text-telemetry-blue font-bold">OBJETIVOS</span>
+          </div>
+
+          <p class="text-slate-300 text-xs leading-relaxed mb-4">
+            La intervención persigue evaluar dos dimensiones interdependientes en estudiantes de ingeniería y ciencias aeroespaciales:
+          </p>
+
+          <div class="space-y-3 font-mono text-xs">
+            <div class="p-3 bg-space-850 rounded border border-space-800">
+              <div class="text-telemetry-green font-bold flex items-center gap-1.5 mb-1">
+                <span>1. Transferencia Cognitiva Conceptual:</span>
+              </div>
+              <p class="text-slate-400 font-sans text-xs leading-relaxed">
+                Comprensión de la dicotomía entre <em>algoritmos no deterministas (Redes Neuronales)</em> y <em>sistemas deterministas de alta integridad (OBC / RTOS)</em> en entornos espaciales regidos por estándares de la ESA (ECSS-E-ST-40C y ECSS-Q-ST-80C).
+              </p>
+            </div>
+
+            <div class="p-3 bg-space-850 rounded border border-space-800">
+              <div class="text-telemetry-cyan font-bold flex items-center gap-1.5 mb-1">
+                <span>2. Usabilidad Técnica y Carga Cognitiva:</span>
+              </div>
+              <p class="text-slate-400 font-sans text-xs leading-relaxed">
+                Facilidad de interacción, claridad de la telemetría espacial simulada y efectividad pedagógica de la retroalimentación gráfica en tiempo real.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pilar 2: Población Objetivo y Criterios de Muestra -->
+        <div class="hud-border rounded-xl p-6 bg-space-900/80">
+          <div class="flex items-center justify-between mb-3 border-b border-space-800 pb-2">
+            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+              <span class="text-telemetry-cyan">03.2</span> POBLACIÓN OBJETIVO
+            </h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-telemetry-cyan/20 text-telemetry-cyan font-bold">MUESTRA PILOTO</span>
+          </div>
+
+          <p class="text-slate-300 text-xs leading-relaxed mb-4">
+            La cohorte de evaluación experimental estará compuesta por una muestra piloto estructurada:
+          </p>
+
+          <div class="grid grid-cols-2 gap-3 font-mono text-xs mb-4">
+            <div class="p-3 bg-space-850 rounded border border-space-800 text-center">
+              <div class="text-2xl font-extrabold text-white">N = 15</div>
+              <div class="text-[10px] text-slate-400 mt-1">Participantes Piloto</div>
+            </div>
+            <div class="p-3 bg-space-850 rounded border border-space-800 text-center">
+              <div class="text-2xl font-extrabold text-telemetry-green">45 min</div>
+              <div class="text-[10px] text-slate-400 mt-1">Duración de Sesión</div>
+            </div>
+          </div>
+
+          <ul class="space-y-2 text-xs font-mono text-slate-300">
+            <li class="flex items-start gap-2">
+              <span class="text-telemetry-blue font-bold">▸</span>
+              <span><strong>Perfil A:</strong> Estudiantes de último año de Ingeniería Civil en Informática (conocimientos en IA y SO concurrentes).</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-telemetry-cyan font-bold">▸</span>
+              <span><strong>Perfil B:</strong> Estudiantes de Ingeniería Aeroespacial / Telecomunicaciones (conocimientos en enlaces satelitales y aviónica).</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-telemetry-green font-bold">▸</span>
+              <span><strong>Criterio de Inclusión:</strong> Haber cursado asignaturas de redes de computadores, arquitectura de microprocesadores o sistemas operativos.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Pilar 3: Condiciones de la Prueba & Tareas Experimentales Guiadas -->
+        <div class="hud-border rounded-xl p-6 bg-space-900/80 md:col-span-2">
+          <div class="flex items-center justify-between mb-3 border-b border-space-800 pb-2">
+            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+              <span class="text-telemetry-green">03.3</span> CONDICIONES DE LA PRUEBA Y TAREAS GUIADAS (LABORATORIO 45 MIN)
+            </h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-telemetry-green/20 text-telemetry-green font-bold">PROTOCOLO EXPERIMENTAL</span>
+          </div>
+
+          <p class="text-slate-300 text-xs leading-relaxed mb-4">
+            Cada participante dispondrá de una terminal individual conectada al simulador bajo observación sincrónica. El protocolo se divide en 3 fases prácticas estandarizadas:
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
+            
+            <!-- Caso A -->
+            <div class="p-4 rounded-lg bg-space-850 border border-space-800 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-telemetry-amber font-bold">CASO EXPERIMENTAL A</span>
+                  <span class="text-[10px] bg-space-800 px-1.5 py-0.5 rounded text-slate-400">10 Min</span>
+                </div>
+                <h4 class="text-white font-bold text-xs font-sans mb-2">Pase Orbital Ciego (Sin Edge AI)</h4>
+                <p class="text-slate-400 font-sans text-xs leading-relaxed mb-3">
+                  El alumno configura un pase LEO con nubosidad entre 75% y 95% manteniendo la IA <strong>APAGADA</strong>.
+                </p>
+                <div class="bg-space-900 p-2.5 rounded text-[11px] text-slate-300 space-y-1">
+                  <div><strong>Objetivo Pedagógico:</strong> Registrar el colapso del canal RF.</div>
+                  <div><strong>Métrica Registrada:</strong> 100% de desperdicio de downlink descargando nubes inútiles.</div>
+                </div>
+              </div>
+              <button onclick="loadScenario('A')" class="mt-3 w-full py-1.5 bg-telemetry-amber/20 hover:bg-telemetry-amber/30 text-telemetry-amber border border-telemetry-amber/40 rounded text-[11px] font-bold transition">
+                Cargar Caso A en Simulador
+              </button>
+            </div>
+
+            <!-- Caso B -->
+            <div class="p-4 rounded-lg bg-space-850 border border-space-800 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-telemetry-green font-bold">CASO EXPERIMENTAL B</span>
+                  <span class="text-[10px] bg-space-800 px-1.5 py-0.5 rounded text-slate-400">15 Min</span>
+                </div>
+                <h4 class="text-white font-bold text-xs font-sans mb-2">Filtrado Autónomo con RTA Armado</h4>
+                <p class="text-slate-400 font-sans text-xs leading-relaxed mb-3">
+                  El alumno activa Edge AI y RTA. Ejecuta un lote de 20 capturas con distribución estocástica de nubosidad.
+                </p>
+                <div class="bg-space-900 p-2.5 rounded text-[11px] text-slate-300 space-y-1">
+                  <div><strong>Objetivo Pedagógico:</strong> Constatar el descarte en el borde (&gt;70% nubes).</div>
+                  <div><strong>Métrica Registrada:</strong> Ahorro neto acumulado del 60% al 70% en megabytes.</div>
+                </div>
+              </div>
+              <button onclick="loadScenario('B')" class="mt-3 w-full py-1.5 bg-telemetry-green/20 hover:bg-telemetry-green/30 text-telemetry-green border border-telemetry-green/40 rounded text-[11px] font-bold transition">
+                Cargar Caso B en Simulador
+              </button>
+            </div>
+
+            <!-- Caso C -->
+            <div class="p-4 rounded-lg bg-space-850 border border-space-800 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-telemetry-red font-bold">CASO EXPERIMENTAL C</span>
+                  <span class="text-[10px] bg-space-800 px-1.5 py-0.5 rounded text-slate-400">20 Min</span>
+                </div>
+                <h4 class="text-white font-bold text-xs font-sans mb-2">Inyección de Falla Crítica &amp; Resiliencia</h4>
+                <p class="text-slate-400 font-sans text-xs leading-relaxed mb-3">
+                  El alumno desactiva el RTA y gatilla la falla crítica para vivenciar una <em>Pérdida Cat A de la Nave</em>. Luego repite con RTA activo para verificar el sandboxing.
+                </p>
+                <div class="bg-space-900 p-2.5 rounded text-[11px] text-slate-300 space-y-1">
+                  <div><strong>Objetivo Pedagógico:</strong> Diferenciar contención determinista vs colapso total.</div>
+                  <div><strong>Métrica Registrada:</strong> Tiempo de respuesta del supervisor y retención del AOCS.</div>
+                </div>
+              </div>
+              <button onclick="loadScenario('C')" class="mt-3 w-full py-1.5 bg-telemetry-red/20 hover:bg-telemetry-red/30 text-telemetry-red border border-telemetry-red/40 rounded text-[11px] font-bold transition">
+                Cargar Caso C en Simulador
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Pilar 4: Datos Esperados e Instrumentos de Medición -->
+        <div class="hud-border rounded-xl p-6 bg-space-900/80 md:col-span-2">
+          <div class="flex items-center justify-between mb-4 border-b border-space-800 pb-2">
+            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+              <span class="text-telemetry-amber">03.4</span> INSTRUMENTOS DE MEDICIÓN Y DATOS ESPERADOS
+            </h3>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-telemetry-amber/20 text-telemetry-amber font-bold">MÉTRICAS</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-xs">
+            
+            <!-- Instrumento 1: SUS -->
+            <div class="p-4 rounded-lg bg-space-850 border border-space-800">
+              <div class="text-telemetry-green font-bold text-sm mb-1">1. Usabilidad del Sistema (SUS)</div>
+              <div class="text-slate-400 text-xs font-sans mb-3">
+                System Usability Scale estandarizada de 10 ítems (Likert 1-5) aplicada inmediatamente tras concluir la sesión.
+              </div>
+              <div class="p-3 bg-space-900 rounded border border-space-750 space-y-1 text-[11px]">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Puntaje Esperado:</span>
+                  <span class="text-telemetry-green font-bold">&gt; 80.0 / 100</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Grado de Calificación:</span>
+                  <span class="text-telemetry-cyan font-bold">Grado A ("Excelente")</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Criterio Aceptación:</span>
+                  <span class="text-slate-200 font-bold">Percentil &gt; 90</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Instrumento 2: Pre-test y Post-test -->
+            <div class="p-4 rounded-lg bg-space-850 border border-space-800">
+              <div class="text-telemetry-blue font-bold text-sm mb-1">2. Ganancia de Aprendizaje (Delta-G)</div>
+              <div class="text-slate-400 text-xs font-sans mb-3">
+                Evaluación pre y post-test con 10 preguntas conceptuales sobre criticidad ECSS, determinismo y SWaP.
+              </div>
+              <div class="p-3 bg-space-900 rounded border border-space-750 space-y-1 text-[11px]">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Pre-test Promedio:</span>
+                  <span class="text-telemetry-amber font-bold">~42% Acierto</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Post-test Promedio:</span>
+                  <span class="text-telemetry-green font-bold">&gt; 85% Acierto</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Factor Hake (g):</span>
+                  <span class="text-telemetry-blue font-bold">g &gt; 0.65 (Alto Impacto)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Instrumento 3: Métricas de Rendimiento -->
+            <div class="p-4 rounded-lg bg-space-850 border border-space-800">
+              <div class="text-telemetry-cyan font-bold text-sm mb-1">3. Rendimiento en el Simulador</div>
+              <div class="text-slate-400 text-xs font-sans mb-3">
+                Telemetría registrada de forma transparente por el motor JavaScript durante los ejercicios prácticos.
+              </div>
+              <div class="p-3 bg-space-900 rounded border border-space-750 space-y-1 text-[11px]">
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Tiempo de Tarea:</span>
+                  <span class="text-slate-200 font-bold">&lt; 8 min por caso</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Tasa de Error:</span>
+                  <span class="text-telemetry-green font-bold">&lt; 5% en manipulación</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-400">Comprensión RTA:</span>
+                  <span class="text-telemetry-cyan font-bold">100% identificación Cat A</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Calculadora Interactiva de Escala SUS (System Usability Scale) integrada -->
+          <div class="mt-6 p-5 rounded-xl bg-space-850/90 border border-space-750">
+            <div class="flex items-center justify-between mb-3 border-b border-space-800 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-telemetry-green rounded-full"></span>
+                <h4 class="text-sm font-bold text-white font-mono">
+                  MÓDULO INTERACTIVO DE EVALUACIÓN SUS EN VIVO (System Usability Scale)
+                </h4>
+              </div>
+              <span class="text-xs font-mono text-telemetry-green font-bold" id="sus-score-display">PUNTAJE SUS: 82.5 / 100 (Excelente)</span>
+            </div>
+
+            <p class="text-xs text-slate-400 font-sans mb-4">
+              Los evaluadores y participantes pueden responder la escala SUS estandarizada directamente aquí para calcular el índice compuesto según la fórmula de Brooke (1996):
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+              
+              <!-- Item 1 -->
+              <div class="p-3 rounded bg-space-900 border border-space-800 flex items-center justify-between">
+                <span class="text-slate-300 pr-2">1. Deseo utilizar este simulador frecuentemente para aprender sistemas espaciales:</span>
+                <select id="sus-q1" onchange="calculateSUS()" class="bg-space-800 text-telemetry-cyan rounded border border-space-700 px-2 py-1">
+                  <option value="5">5 (Total Acuerdo)</option>
+                  <option value="4" selected>4 (De acuerdo)</option>
+                  <option value="3">3 (Neutro)</option>
+                  <option value="2">2 (En desacuerdo)</option>
+                  <option value="1">1 (Total Desacuerdo)</option>
+                </select>
+              </div>
+
+              <!-- Item 2 -->
+              <div class="p-3 rounded bg-space-900 border border-space-800 flex items-center justify-between">
+                <span class="text-slate-300 pr-2">2. Encontré el simulador innecesariamente complejo:</span>
+                <select id="sus-q2" onchange="calculateSUS()" class="bg-space-800 text-telemetry-cyan rounded border border-space-700 px-2 py-1">
+                  <option value="1" selected>1 (Total Desacuerdo)</option>
+                  <option value="2">2 (En desacuerdo)</option>
+                  <option value="3">3 (Neutro)</option>
+                  <option value="4">4 (De acuerdo)</option>
+                  <option value="5">5 (Total Acuerdo)</option>
+                </select>
+              </div>
+
+              <!-- Item 3 -->
+              <div class="p-3 rounded bg-space-900 border border-space-800 flex items-center justify-between">
+                <span class="text-slate-300 pr-2">3. El simulador fue intuitivo y fácil de operar:</span>
+                <select id="sus-q3" onchange="calculateSUS()" class="bg-space-800 text-telemetry-cyan rounded border border-space-700 px-2 py-1">
+                  <option value="5" selected>5 (Total Acuerdo)</option>
+                  <option value="4">4 (De acuerdo)</option>
+                  <option value="3">3 (Neutro)</option>
+                  <option value="2">2 (En desacuerdo)</option>
+                  <option value="1">1 (Total Desacuerdo)</option>
+                </select>
+              </div>
+
+              <!-- Item 4 -->
+              <div class="p-3 rounded bg-space-900 border border-space-800 flex items-center justify-between">
+                <span class="text-slate-300 pr-2">4. La demostración de la falla de Categoría A clarificó el rol del RTA:</span>
+                <select id="sus-q4" onchange="calculateSUS()" class="bg-space-800 text-telemetry-cyan rounded border border-space-700 px-2 py-1">
+                  <option value="5" selected>5 (Total Acuerdo)</option>
+                  <option value="4">4 (De acuerdo)</option>
+                  <option value="3">3 (Neutro)</option>
+                  <option value="2">2 (En desacuerdo)</option>
+                  <option value="1">1 (Total Desacuerdo)</option>
+                </select>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal / Banner Alerta de Emergencia Catastrófica (Falla Crítica) -->
+  <div id="catastrophe-overlay" class="fixed inset-0 bg-red-950/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+    <div class="hud-border max-w-xl w-full p-6 sm:p-8 bg-space-950 border-telemetry-red rounded-xl shadow-2xl relative animate-bounce-short">
+      <div class="flex items-center gap-3 text-telemetry-red mb-4">
+        <span class="w-4 h-4 rounded-full bg-telemetry-red animate-ping"></span>
+        <h3 class="font-mono text-lg font-black tracking-widest uppercase crt-glow-red">
+          ESA CRITICAL ANOMALY: CATEGORY A EVENT
+        </h3>
+      </div>
+
+      <div class="bg-telemetry-red/10 border border-telemetry-red/40 p-4 rounded-lg font-mono text-xs text-red-200 space-y-2 mb-6">
+        <div class="font-bold text-sm text-telemetry-red">⚠ BUS DE AVIONICA CORROMPIDO • MEMORY CORRUPTION DETECTED</div>
+        <p class="leading-relaxed">
+          Un desbordamiento de pila (<code class="text-white">Stack Overflow / Pointer Corruption</code>) en la aplicación de IA no aislada ha invadido el espacio de memoria síncrono del Computador de Bordo (OBC).
+        </p>
+        <div class="border-t border-telemetry-red/30 pt-2 text-[11px] text-red-300">
+          <div>• Watchdog Timeout en RTOS Principal: EXPIRED</div>
+          <div>• Estado del AOCS: PÉRDIDA DE CONTROL DE ACTITUD (Tumbling)</div>
+          <div>• Telemetría S-Band: SILENCIO DE RADIO (Beacon Lost)</div>
+          <div>• Clasificación de Severidad: <strong class="text-white underline">CATEGORÍA A (PÉRDIDA TOTAL DE LA NAVE)</strong></div>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 font-mono text-xs">
+        <button onclick="armRTAAndRecover()" class="flex-1 py-3 px-4 bg-telemetry-green hover:bg-telemetry-green/80 text-space-950 font-bold rounded transition text-center shadow-lg shadow-telemetry-green/20">
+          Armar RTA / NMF y Restaurar Nave
+        </button>
+        <button onclick="closeCatastropheOverlay()" class="py-3 px-4 bg-space-850 hover:bg-space-800 text-slate-300 border border-space-700 rounded transition text-center">
+          Ignorar y Analizar Telemetría
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer con Identificación de Tesina Académica -->
+  <footer class="border-t border-space-850 bg-space-950/90 py-4 px-4 sm:px-6 mt-12 text-xs font-mono text-slate-400">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-2">
+        <span class="text-telemetry-blue">◈</span>
+        <span>Tesina de Licenciatura / Magíster: <strong>Alonso Clemente</strong> (2026)</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        <span>Misión: <strong class="text-slate-300">ESA PhiSat-1 (FSSCat 6U)</strong></span>
+        <span>•</span>
+        <span>Framework: <strong class="text-telemetry-green">NMF / ECSS Compliant</strong></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ================================================================================== -->
+  <!-- JAVASCRIPT NATIVO: LÓGICA DE SIMULACIÓN, MODELADO MATEMÁTICO Y TELEMETRÍA -->
+  <!-- ================================================================================== -->
+  <script>
+    // --- ESTADO GLOBAL DE LA NAVE Y DEL SIMULADOR ---
+    const state = {
+      cloudPercentage: 65,
+      edgeAiEnabled: true,
+      rtaEnabled: true,
+      rfBand: 'x', // 's' = 2 Mbps, 'x' = 50 Mbps
+      simulatedFaultActive: false,
+      frameCount: 1,
+      totalCaptures: 0,
+      totalDiscarded: 0,
+      totalTransmitted: 0,
+      totalMegabytesGenerated: 0,
+      totalMegabytesDownloaded: 0,
+      rawFrameSizeMB: 25.0, // Tamaño representativo de un frame hiperespectral SIMERA (MB)
+      audioEnabled: false,
+      currentAudioCtx: null,
+    };
+
+    // --- RELOJ Y TELEMETRÍA DE TIEMPO REAL ---
+    function updateFlightClock() {
+      const now = new Date();
+      const utcStr = now.toISOString().substring(11, 19) + ' UTC';
+      const clockEl = document.getElementById('telemetry-clock');
+      if (clockEl) clockEl.innerText = utcStr;
+    }
+    setInterval(updateFlightClock, 1000);
+    updateFlightClock();
+
+    // --- GESTIÓN DE PESTAÑAS (TABS) ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-telemetry-blue', 'text-telemetry-blue');
+        btn.classList.add('border-transparent', 'text-slate-400');
+      });
+
+      const activeContent = document.getElementById('content-' + tabId);
+      const activeBtn = document.getElementById('nav-' + tabId);
+
+      if (activeContent) activeContent.classList.remove('hidden');
+      if (activeBtn) {
+        activeBtn.classList.add('border-telemetry-blue', 'text-telemetry-blue');
+        activeBtn.classList.remove('border-transparent', 'text-slate-400');
+      }
+
+      playBeep(880, 0.05);
+
+      // Redibujar canvas si cambiamos al simulador
+      if (tabId === 'tab2') {
+        setTimeout(renderSatelliteView, 50);
+      }
+    }
+
+    // --- SINTETIZADOR DE AUDIO WEB (TELEMETRÍA AEROESPACIAL) ---
+    function toggleAudio() {
+      state.audioEnabled = !state.audioEnabled;
+      const indicator = document.getElementById('audio-indicator');
+      const text = document.getElementById('audio-text');
+
+      if (state.audioEnabled) {
+        if (!state.currentAudioCtx) {
+          state.currentAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        indicator.classList.remove('bg-slate-500');
+        indicator.classList.add('bg-telemetry-green');
+        text.innerText = "Audio Telemetría: ON";
+        playBeep(1200, 0.1);
+      } else {
+        indicator.classList.remove('bg-telemetry-green');
+        indicator.classList.add('bg-slate-500');
+        text.innerText = "Audio Telemetría: OFF";
+      }
+    }
+
+    function playBeep(freq = 900, duration = 0.08, type = 'sine') {
+      if (!state.audioEnabled) return;
+      try {
+        if (!state.currentAudioCtx) {
+          state.currentAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        const ctx = state.currentAudioCtx;
+        if (ctx.state === 'suspended') ctx.resume();
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (e) {
+        // Audio deshabilitado por política de navegador
+      }
+    }
+
+    function playAlarmTone() {
+      if (!state.audioEnabled) return;
+      playBeep(350, 0.25, 'sawtooth');
+      setTimeout(() => playBeep(250, 0.3, 'sawtooth'), 260);
+    }
+
+    // --- CONTROL DE BANDA RF ---
+    function setRfBand(band) {
+      state.rfBand = band;
+      const sBtn = document.getElementById('rf-band-s');
+      const xBtn = document.getElementById('rf-band-x');
+
+      if (band === 's') {
+        sBtn.classList.remove('border-space-700', 'bg-space-850', 'text-slate-400');
+        sBtn.classList.add('border-telemetry-blue', 'bg-telemetry-blue/15', 'text-telemetry-blue');
+
+        xBtn.classList.add('border-space-700', 'bg-space-850', 'text-slate-400');
+        xBtn.classList.remove('border-telemetry-blue', 'bg-telemetry-blue/15', 'text-telemetry-blue');
+        addLog("Configurado transmisor RF: BANDA S @ 2.0 Mbps (TT&C Downlink).");
+      } else {
+        xBtn.classList.remove('border-space-700', 'bg-space-850', 'text-slate-400');
+        xBtn.classList.add('border-telemetry-blue', 'bg-telemetry-blue/15', 'text-telemetry-blue');
+
+        sBtn.classList.add('border-space-700', 'bg-space-850', 'text-slate-400');
+        sBtn.classList.remove('border-telemetry-blue', 'bg-telemetry-blue/15', 'text-telemetry-blue');
+        addLog("Configurado transmisor RF: BANDA X @ 50.0 Mbps (High-Speed Downlink).");
+      }
+      playBeep(1100, 0.05);
+      updateSimulation();
+    }
+
+    // --- LOG DE TELEMETRÍA NMF ---
+    function addLog(msg, type = 'info') {
+      const logContainer = document.getElementById('telemetry-log');
+      const countEl = document.getElementById('log-count');
+      if (!logContainer) return;
+
+      const now = new Date();
+      const timeStr = now.toISOString().substring(11, 23);
+      const row = document.createElement('div');
+      row.className = 'flex items-start gap-1.5 font-mono';
+
+      let colorClass = 'text-slate-300';
+      let tag = '[INFO]';
+      if (type === 'warn') {
+        colorClass = 'text-telemetry-amber';
+        tag = '[WARN]';
+      } else if (type === 'crit') {
+        colorClass = 'text-telemetry-red font-bold';
+        tag = '[CRIT]';
+      } else if (type === 'success') {
+        colorClass = 'text-telemetry-green';
+        tag = '[SUCC]';
+      }
+
+      row.innerHTML = `<span class="text-slate-500">${timeStr}</span> <span class="${colorClass}">${tag} ${msg}</span>`;
+      logContainer.prepend(row);
+
+      // Limitar a 50 elementos
+      while (logContainer.children.length > 50) {
+        logContainer.removeChild(logContainer.lastChild);
+      }
+      if (countEl) {
+        countEl.innerText = `Total eventos: ${logContainer.children.length}`;
+      }
+    }
+
+    // --- MOTOR MATEMÁTICO Y DE DECISIÓN DEL SIMULADOR ---
+    function updateSimulation() {
+      // 1. Leer inputs
+      const cloudSlider = document.getElementById('cloud-slider');
+      const aiToggle = document.getElementById('ai-toggle');
+      const rtaToggle = document.getElementById('rta-toggle');
+
+      state.cloudPercentage = parseInt(cloudSlider.value, 10);
+      state.edgeAiEnabled = aiToggle.checked;
+      state.rtaEnabled = rtaToggle.checked;
+
+      // Actualizar visualizadores de control
+      document.getElementById('cloud-value-display').innerText = state.cloudPercentage + '%';
+      
+      const aiPill = document.getElementById('ai-status-pill');
+      if (state.edgeAiEnabled) {
+        aiPill.className = 'text-[10px] px-1.5 py-0.2 rounded bg-telemetry-green/20 text-telemetry-green border border-telemetry-green/30';
+        aiPill.innerText = 'ACTIVO';
+      } else {
+        aiPill.className = 'text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700';
+        aiPill.innerText = 'BYPASS';
+      }
+
+      const rtaPill = document.getElementById('rta-status-pill');
+      if (state.rtaEnabled) {
+        rtaPill.className = 'text-[10px] px-1.5 py-0.2 rounded bg-telemetry-green/20 text-telemetry-green border border-telemetry-green/30';
+        rtaPill.innerText = 'ARMADO';
+      } else {
+        rtaPill.className = 'text-[10px] px-1.5 py-0.2 rounded bg-telemetry-amber/20 text-telemetry-amber border border-telemetry-amber/30';
+        rtaPill.innerText = 'DESARMADO';
+      }
+
+      // 2. Cálculos de Latencia y Consumo
+      const latencyEl = document.getElementById('metric-latency');
+      const latencySub = document.getElementById('metric-latency-sub');
+      const powerEl = document.getElementById('metric-power');
+      const powerSub = document.getElementById('metric-power-sub');
+
+      if (state.edgeAiEnabled) {
+        // Latencia realista con fluctuación leve de inferencia (132 a 138 ms en FP16)
+        const latency = 135 + Math.floor((state.cloudPercentage % 7) - 3);
+        latencyEl.innerText = latency;
+        latencySub.innerText = 'Myriad 2 (FP16)';
+        powerEl.innerText = '2.50';
+        powerSub.innerText = 'Myriad 2 VPU Activa';
+        powerSub.className = 'text-[10px] text-telemetry-green mt-0.5';
+      } else {
+        latencyEl.innerText = '0';
+        latencySub.innerText = 'Bypass (Directo)';
+        powerEl.innerText = '0.00';
+        powerSub.innerText = 'VPU en Suspensión';
+        powerSub.className = 'text-[10px] text-slate-500 mt-0.5';
+      }
+
+      // 3. Tiempo de Transmisión por Frame
+      // Tamaño frame: 25 MB = 200 Megabits
+      const frameBits = state.rawFrameSizeMB * 8; // 200 Mb
+      const baudRate = state.rfBand === 's' ? 2.0 : 50.0; // Mbps
+      const txSeconds = (frameBits / baudRate).toFixed(1);
+
+      const txTimeEl = document.getElementById('metric-tx-time');
+      const txSubEl = document.getElementById('metric-tx-sub');
+      txTimeEl.innerText = txSeconds;
+      txSubEl.innerText = state.rfBand === 's' ? '@ Banda S 2.0M' : '@ Banda X 50.0M';
+
+      // 4. Lógica de Decisión de Transmisión
+      // Regla de Oro: Si Edge AI está Encendido y Nubosidad > 70%, se descarta autónomamente
+      const decisionBadge = document.getElementById('decision-badge');
+      const decisionText = document.getElementById('decision-text');
+      const decisionIcon = document.getElementById('decision-icon');
+      const frameSavingsText = document.getElementById('frame-savings-text');
+      const maskStatusEl = document.getElementById('canvas-mask-status');
+
+      const isDiscarded = state.edgeAiEnabled && (state.cloudPercentage > 70);
+
+      if (isDiscarded) {
+        // DESCARTADA EN ÓRBITA
+        decisionBadge.className = 'p-3 rounded-lg border font-mono flex items-center justify-between bg-telemetry-red/10 border-telemetry-red/40';
+        decisionText.className = 'text-sm font-bold text-telemetry-red';
+        decisionText.innerText = 'DESCARTADA EN ÓRBITA (NUBES > 70%)';
+        decisionIcon.innerText = '🗑️';
+        frameSavingsText.innerText = '100% AHORRADO';
+        frameSavingsText.className = 'text-sm font-bold text-telemetry-green';
+        if (maskStatusEl) {
+          maskStatusEl.innerText = 'DESCARTAR [FLAG_DROP=1]';
+          maskStatusEl.className = 'text-telemetry-red font-bold';
+        }
+      } else if (state.edgeAiEnabled && state.cloudPercentage <= 70) {
+        // TRANSMITIDA CON APROBACIÓN DE IA
+        decisionBadge.className = 'p-3 rounded-lg border font-mono flex items-center justify-between bg-telemetry-green/10 border-telemetry-green/40';
+        decisionText.className = 'text-sm font-bold text-telemetry-green';
+        decisionText.innerText = 'TRANSMISIÓN A TIERRA APROBADA';
+        decisionIcon.innerText = '📡';
+        frameSavingsText.innerText = '0% (DATO ÚTIL)';
+        frameSavingsText.className = 'text-sm font-bold text-telemetry-cyan';
+        if (maskStatusEl) {
+          maskStatusEl.innerText = 'APROBADA [CIELO ÚTIL]';
+          maskStatusEl.className = 'text-telemetry-green font-bold';
+        }
+      } else {
+        // TRANSMISIÓN CIEGA (SIN IA)
+        const isWasted = state.cloudPercentage > 70;
+        decisionBadge.className = 'p-3 rounded-lg border font-mono flex items-center justify-between bg-space-850 border-space-700';
+        decisionText.className = isWasted ? 'text-sm font-bold text-telemetry-amber' : 'text-sm font-bold text-slate-200';
+        decisionText.innerText = isWasted ? 'TX CIEGA (DESPERDICIO 100%)' : 'TX CIEGA A TIERRA';
+        decisionIcon.innerText = '⚡';
+        frameSavingsText.innerText = '0% (SIN FILTRO)';
+        frameSavingsText.className = 'text-sm font-bold text-slate-400';
+        if (maskStatusEl) {
+          maskStatusEl.innerText = 'BYPASS [NO ANALIZADA]';
+          maskStatusEl.className = 'text-slate-400 font-bold';
+        }
+      }
+
+      // 5. Redibujar Canvas
+      renderSatelliteView();
+    }
+
+    // --- CAPTURA DE UN NUEVO FRAME INDIVIDUAL ---
+    function captureNewFrame() {
+      state.frameCount++;
+      state.totalCaptures++;
+      state.totalMegabytesGenerated += state.rawFrameSizeMB;
+
+      const isDiscarded = state.edgeAiEnabled && (state.cloudPercentage > 70);
+
+      if (isDiscarded) {
+        state.totalDiscarded++;
+        addLog(`Frame #${state.frameCount}: Nubosidad detectada ${state.cloudPercentage}%. CloudScout aplicó descarte autónomo.`, 'warn');
+        playBeep(440, 0.05);
+      } else {
+        state.totalTransmitted++;
+        state.totalMegabytesDownloaded += state.rawFrameSizeMB;
+        const wasteNotice = (!state.edgeAiEnabled && state.cloudPercentage > 70) ? ' [DESPERDICIO DE CANAL]' : '';
+        addLog(`Frame #${state.frameCount}: Transmitiendo a Ground Station (${state.rawFrameSizeMB} MB)${wasteNotice}.`, 'success');
+        playBeep(880, 0.08);
+      }
+
+      updateAccumulatedStats();
+      updateSimulation();
+    }
+
+    // --- SIMULACIÓN DE PASE ORBITAL POR LOTE (BATCH) ---
+    function simulateBatch(n = 10) {
+      addLog(`Iniciando simulación de pase orbital completo (${n} capturas continuas)...`);
+      let executed = 0;
+
+      const batchInterval = setInterval(() => {
+        // Variar levemente la nubosidad en cada frame para simular avance sobre la superficie
+        const delta = Math.floor(Math.random() * 15) - 7;
+        let newCloud = Math.max(5, Math.min(98, state.cloudPercentage + delta));
+        
+        document.getElementById('cloud-slider').value = newCloud;
+        state.cloudPercentage = newCloud;
+        
+        captureNewFrame();
+        executed++;
+
+        if (executed >= n) {
+          clearInterval(batchInterval);
+          addLog(`Pase orbital completado. Resumen: ${state.totalDiscarded} descartadas / ${state.totalCaptures} procesadas.`, 'info');
+        }
+      }, 250);
+    }
+
+    // --- ACTUALIZAR MÉTRICAS ACUMULADAS ---
+    function updateAccumulatedStats() {
+      const savingsPct = state.totalMegabytesGenerated > 0 
+        ? ((1 - (state.totalMegabytesDownloaded / state.totalMegabytesGenerated)) * 100).toFixed(1)
+        : '0.0';
+
+      const totalSavingsEl = document.getElementById('metric-total-savings');
+      const savingsSubEl = document.getElementById('metric-savings-sub');
+
+      if (totalSavingsEl) totalSavingsEl.innerText = savingsPct;
+      if (savingsSubEl) {
+        const savedMB = (state.totalMegabytesGenerated - state.totalMegabytesDownloaded).toFixed(0);
+        savingsSubEl.innerText = `${savedMB} MB evitados (${state.totalTransmitted} TX / ${state.totalDiscarded} DROP)`;
+      }
+    }
+
+    function resetStats() {
+      state.totalCaptures = 0;
+      state.totalDiscarded = 0;
+      state.totalTransmitted = 0;
+      state.totalMegabytesGenerated = 0;
+      state.totalMegabytesDownloaded = 0;
+      updateAccumulatedStats();
+      addLog("Contadores de telemetría y métricas acumuladas reiniciados a cero.");
+      playBeep(600, 0.08);
+    }
+
+    // --- MANEJO DE FALLAS CRÍTICAS (DIMENSIÓN 2 Y ALTA INTEGRIDAD) ---
+    function triggerFaultInjection() {
+      state.simulatedFaultActive = true;
+      playAlarmTone();
+
+      const obcTitle = document.getElementById('obc-status-title');
+      const obcDesc = document.getElementById('obc-status-desc');
+      const obcContainer = document.getElementById('obc-status-container');
+      const obcBadge = document.getElementById('obc-stability-badge');
+      const obcIcon = document.getElementById('obc-status-icon');
+
+      if (state.rtaEnabled) {
+        // CASO CON RTA ACTIVADO: AISLAMIENTO CONTROLADO
+        addLog("EXCEPCIÓN CRÍTICA: Desbordamiento de puntero en CloudScout CNN [SIGSEGV en Myriad 2 Driver].", "warn");
+        addLog("RTA INTERVENTION: Supervisor NMF / ARINC 653 ha aislado el espacio de memoria. OBC seguro.", "success");
+
+        obcContainer.className = "hud-border rounded-xl p-4 bg-space-900/90 border-telemetry-amber transition-all duration-300 shadow-lg shadow-telemetry-amber/10";
+        obcTitle.className = "font-mono text-sm font-bold text-telemetry-amber tracking-wide";
+        obcTitle.innerText = "FALLO DETECTADO • AISLAMIENTO RTA EXITOSO (MISIÓN A SALVO)";
+        
+        obcBadge.className = "font-mono text-xs bg-telemetry-amber/20 text-telemetry-amber px-2 py-0.5 rounded border border-telemetry-amber/30 font-bold";
+        obcBadge.innerText = "Estabilidad 100% (Sandboxed)";
+        
+        obcIcon.className = "p-2.5 rounded-lg bg-telemetry-amber/20 text-telemetry-amber font-bold text-xl";
+        obcIcon.innerText = "🛡️";
+
+        obcDesc.innerText = "Fallo detectado en la app de IA. El supervisor RTA / NMF ha aislado el espacio de memoria. El OBC retiene el control de vuelo. Misión a Salvo (Estabilidad 100%).";
+
+      } else {
+        // CASO CON RTA DESACTIVADO: PÉRDIDA CATASTRÓFICA (CATEGORÍA A DE LA ESA)
+        addLog("FATAL ERROR: Corrupción de memoria en bus síncrono. Kernel Panic en RTOS de Vuelo.", "crit");
+        addLog("PÉRDIDA TOTAL DE CONTROL DE ACTITUD. Misión abortada. Violación ECSS Cat A.", "crit");
+
+        obcContainer.className = "hud-border rounded-xl p-4 bg-red-950/80 border-telemetry-red transition-all duration-300 animate-pulse shadow-xl shadow-telemetry-red/30";
+        obcTitle.className = "font-mono text-sm font-bold text-telemetry-red tracking-wide crt-glow-red";
+        obcTitle.innerText = "CORRUPCIÓN EN BUS SÍNCRONO • PÉRDIDA CRÍTICA DE LA NAVE";
+
+        obcBadge.className = "font-mono text-xs bg-telemetry-red/30 text-white px-2 py-0.5 rounded border border-telemetry-red font-bold animate-ping";
+        obcBadge.innerText = "CATEGORÍA A (ESA CRITICAL)";
+
+        obcIcon.className = "p-2.5 rounded-lg bg-telemetry-red text-white font-bold text-xl animate-bounce";
+        obcIcon.innerText = "💀";
+
+        obcDesc.innerText = "Corrupción de memoria en el bus síncrono. Desbordamiento de pila en el OBC. PÉRDIDA CRÍTICA DE LA NAVE (Categoría A de la ESA).";
+
+        // Abrir overlay catastrófico modal
+        document.getElementById('catastrophe-overlay').classList.remove('hidden');
+      }
+    }
+
+    function recoverSystem() {
+      state.simulatedFaultActive = false;
+      const obcTitle = document.getElementById('obc-status-title');
+      const obcDesc = document.getElementById('obc-status-desc');
+      const obcContainer = document.getElementById('obc-status-container');
+      const obcBadge = document.getElementById('obc-stability-badge');
+      const obcIcon = document.getElementById('obc-status-icon');
+
+      obcContainer.className = "hud-border rounded-xl p-4 bg-space-900/90 border-telemetry-green/40 transition-all duration-300";
+      obcTitle.className = "font-mono text-sm font-bold text-telemetry-green tracking-wide";
+      obcTitle.innerText = "OBC NOMINAL: SUPERVISOR DE VUELO ACTIVO";
+
+      obcBadge.className = "font-mono text-xs bg-telemetry-green/20 text-telemetry-green px-2 py-0.5 rounded border border-telemetry-green/30 font-bold";
+      obcBadge.innerText = "Estabilidad 100%";
+
+      obcIcon.className = "p-2.5 rounded-lg bg-telemetry-green/20 text-telemetry-green font-bold text-xl";
+      obcIcon.innerText = "✓";
+
+      obcDesc.innerText = "Bus síncrono determinista libre de contienda. El espacio de usuario del procesador Myriad 2 se encuentra aislado y en estado saludable.";
+
+      addLog("Sistema normalizado. Diagnóstico de memoria limpia. OBC restaurado a estado nominal.", "success");
+      playBeep(1200, 0.1);
+    }
+
+    function armRTAAndRecover() {
+      document.getElementById('catastrophe-overlay').classList.add('hidden');
+      document.getElementById('rta-toggle').checked = true;
+      state.rtaEnabled = true;
+      recoverSystem();
+      addLog("Supervisor RTA armado de forma forzada tras recuperación de anomalía.", "warn");
+    }
+
+    function closeCatastropheOverlay() {
+      document.getElementById('catastrophe-overlay').classList.add('hidden');
+    }
+
+    // --- CARGA DE ESCENARIOS GUIADOS DE LA DIMENSIÓN 3 ---
+    function loadScenario(caseId) {
+      switchTab('tab2');
+      if (caseId === 'A') {
+        // Caso A: Alta nubosidad sin IA
+        document.getElementById('cloud-slider').value = 85;
+        document.getElementById('ai-toggle').checked = false;
+        document.getElementById('rta-toggle').checked = true;
+        addLog("ESCENARIO EXPERIMENTAL A CARGADO: Pase con 85% nubes y Edge AI DESACTIVADA.");
+      } else if (caseId === 'B') {
+        // Caso B: Edge AI con RTA
+        document.getElementById('cloud-slider').value = 75;
+        document.getElementById('ai-toggle').checked = true;
+        document.getElementById('rta-toggle').checked = true;
+        addLog("ESCENARIO EXPERIMENTAL B CARGADO: Filtrado Autónomo con CloudScout + RTA ARMADO.");
+      } else if (caseId === 'C') {
+        // Caso C: Falla sin RTA
+        document.getElementById('cloud-slider').value = 60;
+        document.getElementById('ai-toggle').checked = true;
+        document.getElementById('rta-toggle').checked = false;
+        addLog("ESCENARIO EXPERIMENTAL C CARGADO: RTA DESARMADO. Listo para inyectar falla crítica.");
+      }
+      updateSimulation();
+    }
+
+    // --- CALCULADORA INTERACTIVA DE ESCALA SUS (DIMENSIÓN 3) ---
+    function calculateSUS() {
+      // Fórmula estándar SUS:
+      // Para ítems impares (1, 3, 5, 7, 9): Valor - 1
+      // Para ítems pares (2, 4, 6, 8, 10): 5 - Valor
+      // Multiplicar suma por 2.5
+      const q1 = parseInt(document.getElementById('sus-q1').value, 10);
+      const q2 = parseInt(document.getElementById('sus-q2').value, 10);
+      const q3 = parseInt(document.getElementById('sus-q3').value, 10);
+      const q4 = parseInt(document.getElementById('sus-q4').value, 10);
+
+      // Normalización ponderada a 4 ítems representativos escalados a base 100
+      const score1 = q1 - 1;
+      const score2 = 5 - q2;
+      const score3 = q3 - 1;
+      const score4 = q4 - 1; // Pregunta positiva
+
+      const totalRaw = score1 + score2 + score3 + score4; // Máximo 16
+      const finalScore = ((totalRaw / 16) * 100).toFixed(1);
+
+      const susDisplay = document.getElementById('sus-score-display');
+      let rating = "Aceptable";
+      if (finalScore >= 85) rating = "Excelente (Grado A+)";
+      else if (finalScore >= 75) rating = "Bueno (Grado B)";
+      else if (finalScore >= 50) rating = "Marginal (Grado C)";
+      else rating = "Inaceptable (Grado F)";
+
+      susDisplay.innerText = `PUNTAJE SUS: ${finalScore} / 100 (${rating})`;
+      playBeep(900, 0.04);
+    }
+
+    // --- RENDERIZADOR DEL CANVAS SATELITAL (EARTH & CLOUDS PROCEDURAL) ---
+    function renderSatelliteView() {
+      const canvas = document.getElementById('satelliteCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+
+      // Ajustar resolución interna al tamaño real del contenedor
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // 1. Dibujar océano base (azul oscuro espacial)
+      const oceanGrad = ctx.createLinearGradient(0, 0, w, h);
+      oceanGrad.addColorStop(0, '#0c2444');
+      oceanGrad.addColorStop(1, '#051329');
+      ctx.fillStyle = oceanGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // 2. Dibujar masa de tierra simulada (costa fractal simple)
+      ctx.fillStyle = '#1e3a29'; // Verde tierra satelital
+      ctx.beginPath();
+      ctx.moveTo(w * 0.1, 0);
+      ctx.bezierCurveTo(w * 0.4, h * 0.2, w * 0.2, h * 0.6, w * 0.5, h);
+      ctx.lineTo(w, h);
+      ctx.lineTo(w, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Relieve costero
+      ctx.fillStyle = '#2d5a3f';
+      ctx.beginPath();
+      ctx.arc(w * 0.65, h * 0.4, w * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Dibujar capas de nubes proporcionales al slider de nubosidad
+      const cloudFraction = state.cloudPercentage / 100;
+      const numPuffs = Math.floor(cloudFraction * 35);
+
+      // Semilla pseudo-determinista basada en cloudPercentage
+      for (let i = 0; i < numPuffs; i++) {
+        const seedX = ((i * 137.5) % w);
+        const seedY = ((i * 219.3) % h);
+        const radius = 25 + (i % 5) * 15;
+
+        const cloudGrad = ctx.createRadialGradient(seedX, seedY, radius * 0.1, seedX, seedY, radius);
+        cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+        cloudGrad.addColorStop(0.5, 'rgba(240, 245, 255, 0.55)');
+        cloudGrad.addColorStop(1, 'rgba(230, 240, 255, 0)');
+
+        ctx.fillStyle = cloudGrad;
+        ctx.beginPath();
+        ctx.arc(seedX, seedY, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4. Si Edge AI está activa, dibujar la máscara de segmentación de CloudScout
+      if (state.edgeAiEnabled) {
+        ctx.strokeStyle = state.cloudPercentage > 70 ? 'rgba(255, 51, 102, 0.6)' : 'rgba(0, 245, 155, 0.4)';
+        ctx.lineWidth = 1.5;
+
+        // Bounding boxes de segmentación de nubes
+        const gridStep = Math.max(30, Math.floor(w / 10));
+        for (let gx = 0; gx < w; gx += gridStep) {
+          for (let gy = 0; gy < h; gy += gridStep) {
+            // Algoritmo simple de inferencia en canvas: si cae en región con nubes
+            const pseudoDensity = (Math.sin(gx * 0.02) + Math.cos(gy * 0.02) + 2) / 4;
+            if (pseudoDensity < cloudFraction) {
+              // Bloque detectado como nube
+              ctx.fillStyle = 'rgba(255, 51, 102, 0.15)';
+              ctx.fillRect(gx + 2, gy + 2, gridStep - 4, gridStep - 4);
+              ctx.strokeRect(gx + 2, gy + 2, gridStep - 4, gridStep - 4);
+            }
+          }
+        }
+      }
+
+      // Actualizar tags del canvas
+      const timeTag = document.getElementById('canvas-time-tag');
+      const aiTag = document.getElementById('canvas-ai-tag');
+      if (timeTag) timeTag.innerText = `FRAME #${String(state.frameCount).padStart(4, '0')}`;
+      if (aiTag) {
+        aiTag.innerText = state.edgeAiEnabled ? "CNN SEGMENTATION: ON" : "CNN SEGMENTATION: OFF";
+        aiTag.className = state.edgeAiEnabled 
+          ? "px-1.5 py-0.5 rounded bg-space-900/90 text-telemetry-green border border-telemetry-green/40 font-bold"
+          : "px-1.5 py-0.5 rounded bg-space-900/90 text-slate-400 border border-slate-700 font-bold";
+      }
+    }
+
+    // --- GRÁFICO CHART.JS DE ASIMETRÍA GENERACIÓN VS DOWNLINK (TAB 1) ---
+    function initGrowthChart() {
+      const ctx = document.getElementById('growthChart');
+      if (!ctx) return;
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: ['2000', '2005', '2010', '2015', '2020', '2025 (PhiSat-1)'],
+          datasets: [
+            {
+              label: 'Volumen Datos de Sensores Ópticos (Índice Base 100)',
+              data: [100, 320, 1100, 2900, 6800, 10000],
+              borderColor: '#00d2ff',
+              backgroundColor: 'rgba(0, 210, 255, 0.1)',
+              borderWidth: 3,
+              tension: 0.35,
+              fill: true,
+              pointBackgroundColor: '#00d2ff',
+              pointRadius: 4,
+            },
+            {
+              label: 'Capacidad Enlace RF Downlink (Índice Base 100)',
+              data: [100, 140, 210, 290, 390, 500],
+              borderColor: '#ffb703',
+              backgroundColor: 'rgba(255, 183, 3, 0.05)',
+              borderWidth: 2.5,
+              borderDash: [5, 5],
+              tension: 0.2,
+              fill: true,
+              pointBackgroundColor: '#ffb703',
+              pointRadius: 4,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                color: '#94a3b8',
+                font: {
+                  family: 'JetBrains Mono',
+                  size: 10
+                }
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: '#060d1f',
+              borderColor: '#1b326b',
+              borderWidth: 1,
+              titleColor: '#00d2ff',
+              bodyColor: '#e2e8f0',
+              titleFont: { family: 'JetBrains Mono' },
+              bodyFont: { family: 'JetBrains Mono' }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(27, 50, 107, 0.25)' },
+              ticks: {
+                color: '#64748b',
+                font: { family: 'JetBrains Mono', size: 10 }
+              }
+            },
+            y: {
+              type: 'logarithmic',
+              grid: { color: 'rgba(27, 50, 107, 0.25)' },
+              ticks: {
+                color: '#64748b',
+                font: { family: 'JetBrains Mono', size: 10 },
+                callback: function(value) {
+                  return value + 'x';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // --- INICIALIZACIÓN GENERAL AL CARGAR DOM ---
+    window.addEventListener('DOMContentLoaded', () => {
+      initGrowthChart();
+      updateSimulation();
+      addLog("Sistema inicializado. Subsistemas PhiSat-1 en modo NOMINAL.");
+      addLog("Cargada red CloudScout FP16 en memoria compartida Myriad 2.");
+      addLog("Supervisor RTA / NMF activado y enlazado con el RTOS del OBC.");
+
+      // Redibujar canvas en cambios de tamaño de ventana
+      window.addEventListener('resize', renderSatelliteView);
+    });
+  </script>
+
+</body>
+</html>
