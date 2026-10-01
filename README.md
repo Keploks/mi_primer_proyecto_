@@ -2,4 +2,4 @@
 
 __Registró de cambios:__
 
-- 01-10-2026 se agregago una encuesta de la pagina para registrar información
+- 01-10-2026 se agrego una encuesta en la pagina para registrar información.
