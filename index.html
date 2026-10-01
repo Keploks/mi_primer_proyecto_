@@ -1189,6 +1189,14 @@
 
             </div>
 
+            <!-- Envío de la encuesta a Google Sheets -->
+            <div class="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <button id="sus-submit-btn" type="button" onclick="enviarEncuesta()" class="py-2 px-4 bg-telemetry-green/20 hover:bg-telemetry-green/30 text-telemetry-green border border-telemetry-green/40 rounded font-mono text-xs font-bold transition">
+                ENVIAR RESPUESTAS
+              </button>
+              <span id="sus-submit-status" class="text-xs font-mono text-slate-400"></span>
+            </div>
+
           </div>
 
         </div>
@@ -1753,6 +1761,44 @@
 
       susDisplay.innerText = `PUNTAJE SUS: ${finalScore} / 100 (${rating})`;
       playBeep(900, 0.04);
+    }
+
+    // --- ENVÍO DE LA ENCUESTA SUS A GOOGLE SHEETS (Apps Script) ---
+    // Pega aquí la URL de tu implementación de Apps Script (termina en /exec)
+    const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbyrwNodGAi6e1E8yad0Itrg4dTALul9vIhEKqANgTfjI51KGYD3qHoPOm76G-keu_p5/exec';
+
+    async function enviarEncuesta() {
+      const btn = document.getElementById('sus-submit-btn');
+      const status = document.getElementById('sus-submit-status');
+
+      // Calcula el puntaje con los valores actuales
+      calculateSUS();
+      const q1 = parseInt(document.getElementById('sus-q1').value, 10);
+      const q2 = parseInt(document.getElementById('sus-q2').value, 10);
+      const q3 = parseInt(document.getElementById('sus-q3').value, 10);
+      const q4 = parseInt(document.getElementById('sus-q4').value, 10);
+      const total = (q1 - 1) + (5 - q2) + (q3 - 1) + (q4 - 1);
+      const score = parseFloat(((total / 16) * 100).toFixed(1));
+
+      btn.disabled = true;
+      status.className = 'text-xs font-mono text-slate-400';
+      status.innerText = 'Enviando...';
+
+      try {
+        // text/plain evita el preflight CORS que Apps Script no soporta
+        await fetch(SHEETS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ q1, q2, q3, q4, score })
+        });
+        status.className = 'text-xs font-mono text-telemetry-green';
+        status.innerText = '✔ Respuestas enviadas. ¡Gracias por participar!';
+      } catch (err) {
+        status.className = 'text-xs font-mono text-telemetry-red';
+        status.innerText = '✖ No se pudo enviar. Intenta de nuevo.';
+        btn.disabled = false;
+      }
     }
 
     // --- RENDERIZADOR DEL CANVAS SATELITAL (EARTH & CLOUDS PROCEDURAL) ---
